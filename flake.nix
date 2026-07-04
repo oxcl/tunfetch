@@ -22,7 +22,7 @@
           rustToolchain
           pkgs.pkg-config
           pkgs.openssl
-          pkgs.worker-build
+          pkgs.wasm-pack
         ];
 
         # helps pkg-config find openssl.pc

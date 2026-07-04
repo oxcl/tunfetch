@@ -1,6 +1,0 @@
-name = "tunfetch"
-main = "build/index.js"
-compatibility_date = "2026-05-25"
-
-[build]
-command = "worker-build --release"
