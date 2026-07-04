@@ -609,6 +609,7 @@ dependencies = [
  "hyper-util",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "web-sys",
  "worker",
 ]
 

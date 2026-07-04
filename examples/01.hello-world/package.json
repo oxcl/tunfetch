@@ -1,0 +1,14 @@
+{
+  "name": "tunfetch-hello-world",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev"
+  },
+  "dependencies": {
+    "tunfetch": "file:../../crates/tunfetch/pkg"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

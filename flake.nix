@@ -15,14 +15,28 @@
       rustToolchain = pkgs.rust-bin.stable.latest.default.override {
         targets = [ "wasm32-unknown-unknown" ];
       };
+
+      wasm-bindgen-cli = pkgs.buildWasmBindgenCli rec {
+        src = pkgs.fetchCrate {
+          pname = "wasm-bindgen-cli";
+          version = "0.2.126"; # must match Cargo.lock exactly
+          hash = "sha256-H6Is3fiZVxZCfOMWK5dWMSrtn50VGv0sfdnsT+cTtyk=";
+        };
+        cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
+          inherit src;
+          inherit (src) pname version;
+          hash = "sha256-VucqkXbCi4qtQzY/HrXiDnbSURsagPsdNVMn1Tw3UiY=";
+        };
+      };
     in
     {
       devShells.${system}.default = pkgs.mkShell {
-        buildInputs = [
+        buildInputs = with pkgs; [
           rustToolchain
-          pkgs.pkg-config
-          pkgs.openssl
-          pkgs.wasm-pack
+          pkg-config
+          openssl
+          wasm-pack
+          wasm-bindgen-cli
         ];
 
         # helps pkg-config find openssl.pc
