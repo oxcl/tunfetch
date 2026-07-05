@@ -1,11 +1,11 @@
 [package]
-name = "tunfetch"
+name = "tunfetch-wasm"
 version = "0.1.0"
 edition = "2021"
 authors = ["oxcl <oxcl@proton.me>"]
 repository = "https://github.com/oxcl/tunfetch"
 description = "Drop-in fetch() replacement for Cloudflare Workers with SOCKS5 and HTTP proxy support built with Rust and WASM"
-license = "LGPL"
+license = "LGPLv3"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
