@@ -1,0 +1,16 @@
+{
+  "name": "tunfetch",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bash crates/tunfetch/build.sh",
+    "test:integration": "vitest run --config tests/integration/vitest.config.ts",
+    "test:integration:watch": "vitest --config tests/integration/vitest.config.ts"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.18.0",
+    "testcontainers": "^10.0.0",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.0.0"
+  }
+}
