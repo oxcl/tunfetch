@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "bash crates/tunfetch/build.sh",
+    "test:unit": "cd crates/tunfetch && cargo test",
     "test:integration": "vitest run --config tests/integration/vitest.config.ts",
     "test:integration:watch": "vitest --config tests/integration/vitest.config.ts"
   },
