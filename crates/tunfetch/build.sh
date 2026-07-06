@@ -13,21 +13,16 @@ wasm-pack build --target bundler "$SCRIPT_DIR"
 echo "Patching tunfetch.js for Cloudflare Workers..."
 cat > "$PKG_DIR/tunfetch.js" << 'PATCH'
 /* @ts-self-types="./tunfetch.d.ts" */
-import * as imports from "./tunfetch_bg.js";
+import * as imports from "./tunfetch_wasm_bg.js";
+import wkmod from "./tunfetch_wasm_bg.wasm";
 
-// switch between both syntax for node and for workerd
-import wkmod from "./tunfetch_bg.wasm";
-import * as nodemod from "./tunfetch_bg.wasm";
-if (typeof process !== "undefined" && process.release.name === "node") {
-  imports.__wbg_set_wasm(nodemod);
-} else {
-  const instance = new WebAssembly.Instance(wkmod, {
-    "./tunfetch_bg.js": imports,
-  });
-  imports.__wbg_set_wasm(instance.exports);
-}
+const instance = new WebAssembly.Instance(wkmod, {
+  "./tunfetch_wasm_bg.js": imports,
+});
+imports.__wbg_set_wasm(instance.exports);
+instance.exports.__wbindgen_start();
 
-export * from "./tunfetch_bg.js";
+export * from "./tunfetch_wasm_bg.js";
 PATCH
 
 echo "Build complete: $PKG_DIR"
