@@ -67,10 +67,14 @@ fn parse_opts(opts: &JsValue) -> Result<(RequestOptions, Option<Proxy>), Tunfetc
             }
         }
 
-        // Parse body
+        // Parse body (string or Uint8Array)
         if let Ok(body_js) = js_sys::Reflect::get(opts_obj, &"body".into()) {
             if let Some(body_str) = body_js.as_string() {
                 request_opts = request_opts.with_body(body_str.into_bytes());
+            } else {
+                let body_arr = js_sys::Uint8Array::try_from(body_js)
+                    .map_err(|_| TunfetchError::Js(JsValue::from_str("body must be a string or Uint8Array")))?;
+                request_opts = request_opts.with_body(body_arr.to_vec());
             }
         }
 
