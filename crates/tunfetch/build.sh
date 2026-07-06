@@ -25,4 +25,36 @@ instance.exports.__wbindgen_start();
 export * from "./tunfetch_wasm_bg.js";
 PATCH
 
+# Update package.json to use the patched tunfetch.js as entry point
+echo "Updating package.json..."
+cat > "$PKG_DIR/package.json" << 'PKGJSON'
+{
+  "name": "tunfetch-wasm",
+  "type": "module",
+  "collaborators": [
+    "oxcl <oxcl@proton.me>"
+  ],
+  "description": "Drop-in fetch() replacement for Cloudflare Workers with SOCKS5 and HTTP proxy support built with Rust and WASM",
+  "version": "0.1.0",
+  "license": "LGPLv3",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/oxcl/tunfetch"
+  },
+  "files": [
+    "tunfetch.js",
+    "tunfetch_wasm_bg.wasm",
+    "tunfetch_wasm_bg.js",
+    "tunfetch_wasm.d.ts",
+    "tunfetch.d.ts"
+  ],
+  "main": "tunfetch.js",
+  "types": "tunfetch.d.ts",
+  "sideEffects": [
+    "./tunfetch.js",
+    "./snippets/*"
+  ]
+}
+PKGJSON
+
 echo "Build complete: $PKG_DIR"
