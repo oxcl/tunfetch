@@ -7,3 +7,5 @@ the structure of the codebase should create a thin layer which setups the wasm b
 after modifying the codebase always run the tests with `cargo test` and make sure all tests pass.
 
 read README.md to understand what the project is about.
+
+due to cloudflare specific requirements the crete must be built with the build.sh script (./crates/tunfetch/build.sh) and not wasm-pack directly. this way the generated js is patched to work with cloudflare workers
