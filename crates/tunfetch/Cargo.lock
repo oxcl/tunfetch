@@ -620,6 +620,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "js-sys",
  "tokio",
  "wasm-bindgen",
  "wasm-bindgen-futures",

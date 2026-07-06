@@ -18,6 +18,7 @@ hyper = { version = "1", default-features = false, features = ["client", "http1"
 hyper-util = { version = "0.1", default-features = false, features = ["tokio"] }
 http-body-util = "0.1"
 console_error_panic_hook = "0.1"
+js-sys = "0.3"
 web-sys = { version = "0.3.103", features = ["console"] }
 tokio = { version = "1", features = ["io-util"] }
 
