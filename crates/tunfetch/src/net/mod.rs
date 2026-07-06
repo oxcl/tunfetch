@@ -4,6 +4,7 @@ pub mod proxy_http;
 pub mod tunnel;
 pub mod connect;
 pub mod request;
+pub mod redirect;
 
 #[cfg(test)]
 pub mod test_utils;

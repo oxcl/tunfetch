@@ -1,7 +1,8 @@
 pub mod net;
 
-use net::request::{build_request, RequestOptions};
+use net::request::{build_request, RequestOptions, RedirectMode};
 use net::proxy::Proxy;
+use net::redirect::{is_redirect, extract_redirect_url, should_change_method, detect_loop, RedirectError};
 
 use http_body_util::BodyExt;
 use hyper::client::conn::http1;
@@ -14,6 +15,7 @@ enum TunfetchError {
     Request(net::request::RequestError),
     Proxy(net::proxy::ProxyError),
     Connect(net::connect::ConnectError),
+    Redirect(RedirectError),
     Hyper(hyper::Error),
     Js(JsValue),
 }
@@ -24,6 +26,7 @@ impl std::fmt::Display for TunfetchError {
             TunfetchError::Request(e) => write!(f, "{e}"),
             TunfetchError::Proxy(e) => write!(f, "{e}"),
             TunfetchError::Connect(e) => write!(f, "{e}"),
+            TunfetchError::Redirect(e) => write!(f, "{e}"),
             TunfetchError::Hyper(e) => write!(f, "hyper error: {e}"),
             TunfetchError::Js(e) => write!(f, "JS error: {:?}", e),
         }
@@ -81,19 +84,41 @@ fn parse_opts(opts: &JsValue) -> Result<(RequestOptions, Option<Proxy>), Tunfetc
                 }
             }
         }
+
+        // Parse redirect
+        if let Ok(redirect_js) = js_sys::Reflect::get(opts_obj, &"redirect".into()) {
+            if let Some(redirect_str) = redirect_js.as_string() {
+                match redirect_str.as_str() {
+                    "manual" => {
+                        request_opts = request_opts.with_redirect(RedirectMode::Manual);
+                    }
+                    "follow" | _ => {
+                        request_opts = request_opts.with_redirect(RedirectMode::Follow);
+                    }
+                }
+            }
+        }
     }
 
     Ok((request_opts, proxy))
 }
 
-#[wasm_bindgen]
-pub async fn tunfetch(url: String, opts: JsValue) -> Result<JsValue, JsValue> {
-    // 1. Parse options
-    let (request_opts, proxy) = parse_opts(&opts)?;
-
-    // 2. Parse URL
+/// Make a single HTTP request and return the response.
+///
+/// This is the core request logic without redirect handling.
+async fn make_request(
+    url: &str,
+    request_opts: &RequestOptions,
+    proxy: &Option<Proxy>,
+) -> Result<(
+    u16,
+    http::HeaderMap,
+    bytes::Bytes,
+    String,
+), TunfetchError> {
+    // 1. Parse URL
     let uri: hyper::Uri = url.parse().map_err(|e: hyper::http::uri::InvalidUri| {
-        JsValue::from_str(&e.to_string())
+        TunfetchError::Js(JsValue::from_str(&e.to_string()))
     })?;
 
     let target_host = uri
@@ -102,22 +127,22 @@ pub async fn tunfetch(url: String, opts: JsValue) -> Result<JsValue, JsValue> {
         .to_string();
     let target_port = uri.port_u16().unwrap_or(80);
 
-    // 3. Build the request
-    let request = build_request(&url, &request_opts).map_err(TunfetchError::Request)?;
+    // 2. Build the request
+    let request = build_request(url, request_opts).map_err(TunfetchError::Request)?;
 
-    // 4. Determine connection target
+    // 3. Determine connection target
     let (connect_host, connect_port) = if let Some(ref p) = proxy {
         (p.host.clone(), p.port)
     } else {
         (target_host.clone(), target_port)
     };
 
-    // 6. Open TCP socket
+    // 4. Open TCP socket
     let socket = Socket::builder()
         .connect(&connect_host, connect_port)
         .map_err(|e| TunfetchError::Js(JsValue::from_str(&e.to_string())))?;
 
-    // 7. Proxy tunnel if needed
+    // 5. Proxy tunnel if needed
     let socket = if let Some(ref p) = proxy {
         net::connect::connect_through_proxy(socket, p, target_host, target_port)
             .await
@@ -126,30 +151,29 @@ pub async fn tunfetch(url: String, opts: JsValue) -> Result<JsValue, JsValue> {
         socket
     };
 
-    // 8. Hyper handshake
+    // 6. Hyper handshake
     let io = TokioIo::new(socket);
     let (mut sender, conn) = http1::handshake(io)
         .await
         .map_err(|e| TunfetchError::Hyper(e))?;
 
-    // 9. Drive connection
+    // 7. Drive connection
     wasm_bindgen_futures::spawn_local(async move {
         if let Err(e) = conn.await {
             web_sys::console::log_1(&format!("connection error: {e:?}").into());
         }
     });
 
-    // 10. Send request
+    // 8. Send request
     let response = sender
         .send_request(request)
         .await
         .map_err(|e| TunfetchError::Hyper(e))?;
 
-    // 11. Extract status and headers
+    // 9. Extract status, headers, and body
     let status = response.status().as_u16();
     let response_headers = response.headers().clone();
 
-    // 12. Read body
     let body_bytes = response
         .into_body()
         .collect()
@@ -157,29 +181,113 @@ pub async fn tunfetch(url: String, opts: JsValue) -> Result<JsValue, JsValue> {
         .map_err(|e| TunfetchError::Hyper(e))?
         .to_bytes();
 
-    // 13. Build JS Response
-    let response_init = web_sys::ResponseInit::new();
-    response_init.set_status(status);
+    Ok((status, response_headers, body_bytes, url.to_string()))
+}
 
-    // Add headers
-    let headers = web_sys::Headers::new().map_err(|e| TunfetchError::Js(e))?;
-    for (key, value) in response_headers.iter() {
-        headers
-            .set(key.as_str(), value.to_str().unwrap_or(""))
+#[wasm_bindgen]
+pub async fn tunfetch(url: String, opts: JsValue) -> Result<JsValue, JsValue> {
+    // 1. Parse options
+    let (request_opts, proxy) = parse_opts(&opts)?;
+
+    let mut current_url = url.clone();
+    let mut current_opts = request_opts;
+    let mut visited_urls: Vec<String> = Vec::new();
+
+    // 2. Follow redirects (unless redirect: "manual")
+    loop {
+        // Make the request
+        let (status, headers, body, final_url) = make_request(
+            &current_url,
+            &current_opts,
+            &proxy,
+        ).await?;
+
+        // Check if this is a redirect
+        let status_code = http::StatusCode::from_u16(status)
+            .map_err(|e| TunfetchError::Js(JsValue::from_str(&e.to_string())))?;
+
+        // If redirect mode is manual, return the redirect response without following
+        if is_redirect(status_code) && current_opts.redirect == RedirectMode::Manual {
+            // Build and return the redirect response as-is
+            let response_init = web_sys::ResponseInit::new();
+            response_init.set_status(status);
+
+            let response_headers_js = web_sys::Headers::new()
+                .map_err(|e| TunfetchError::Js(e))?;
+            for (key, value) in headers.iter() {
+                response_headers_js
+                    .set(key.as_str(), value.to_str().unwrap_or(""))
+                    .map_err(|e| TunfetchError::Js(e))?;
+            }
+            response_init.set_headers(&response_headers_js);
+
+            let js_response = web_sys::Response::new_with_opt_js_u8_array_and_init(
+                Some(&js_sys::Uint8Array::from(&body[..])),
+                &response_init,
+            )
             .map_err(|e| TunfetchError::Js(e))?;
-    }
-    response_init.set_headers(&headers);
 
-    // Null body for status codes that prohibit body (1xx, 204, 304)
-    let js_response = if status == 204 || status == 304 || (status >= 100 && status < 200) {
-        web_sys::Response::new_with_opt_u8_array_and_init(None, &response_init)
-    } else {
-        let js_body = js_sys::Uint8Array::from(&body_bytes[..]);
-        web_sys::Response::new_with_opt_js_u8_array_and_init(Some(&js_body), &response_init)
-    }
-    .map_err(|e| TunfetchError::Js(e))?;
+            return Ok(JsValue::from(js_response));
+        }
 
-    Ok(JsValue::from(js_response))
+        if !is_redirect(status_code) {
+            // Not a redirect - build and return the response
+            let response_init = web_sys::ResponseInit::new();
+            response_init.set_status(status);
+
+            let response_headers_js = web_sys::Headers::new()
+                .map_err(|e| TunfetchError::Js(e))?;
+            for (key, value) in headers.iter() {
+                response_headers_js
+                    .set(key.as_str(), value.to_str().unwrap_or(""))
+                    .map_err(|e| TunfetchError::Js(e))?;
+            }
+            response_init.set_headers(&response_headers_js);
+
+            // Null body for status codes that prohibit body (1xx, 204, 304)
+            let js_response = if status == 204 || status == 304 || (status >= 100 && status < 200) {
+                web_sys::Response::new_with_opt_u8_array_and_init(None, &response_init)
+            } else {
+                let js_body = js_sys::Uint8Array::from(&body[..]);
+                web_sys::Response::new_with_opt_js_u8_array_and_init(Some(&js_body), &response_init)
+            }
+            .map_err(|e| TunfetchError::Js(e))?;
+
+            return Ok(JsValue::from(js_response));
+        }
+
+        // It's a redirect - get the Location header
+        let location = headers
+            .get("location")
+            .or_else(|| headers.get("Location"))
+            .ok_or_else(|| TunfetchError::Redirect(RedirectError::MissingLocation))?
+            .to_str()
+            .map_err(|e| TunfetchError::Js(JsValue::from_str(&e.to_string())))?;
+
+        // Extract the redirect URL
+        let redirect_url = extract_redirect_url(location, &final_url)
+            .map_err(TunfetchError::Redirect)?;
+
+        // Check for redirect loops
+        if detect_loop(&visited_urls, &redirect_url) {
+            return Err(TunfetchError::Redirect(RedirectError::LoopDetected).into());
+        }
+
+        // Track this URL
+        visited_urls.push(final_url);
+
+        // Check redirect limit
+        if visited_urls.len() >= 20 {
+            return Err(TunfetchError::Redirect(RedirectError::TooManyRedirects).into());
+        }
+
+        // For 303, change method to GET for POST/PUT/PATCH
+        if should_change_method(status_code, &current_opts.method) {
+            current_opts = net::request::RequestOptions::new();
+        }
+
+        current_url = redirect_url;
+    }
 }
 
 

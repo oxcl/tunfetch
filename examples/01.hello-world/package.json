@@ -6,7 +6,7 @@
     "dev": "wrangler dev"
   },
   "dependencies": {
-    "tunfetch": "file:../../crates/tunfetch/pkg"
+    "tunfetch-wasm": "file:../../crates/tunfetch/pkg"
   },
   "devDependencies": {
     "wrangler": "^4"

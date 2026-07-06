@@ -9,6 +9,16 @@ pub struct RequestOptions {
     pub method: http::Method,
     pub headers: HashMap<String, String>,
     pub body: Option<Vec<u8>>,
+    pub redirect: RedirectMode,
+}
+
+/// Redirect behavior for the request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RedirectMode {
+    /// Follow redirects automatically (default).
+    Follow,
+    /// Return the redirect response without following.
+    Manual,
 }
 
 /// Errors that can occur when building a request.
@@ -22,12 +32,13 @@ pub enum RequestError {
 }
 
 impl RequestOptions {
-    /// Create a new RequestOptions with default values (GET, no body).
+    /// Create a new RequestOptions with default values (GET, no body, follow redirects).
     pub fn new() -> Self {
         Self {
             method: http::Method::GET,
             headers: HashMap::new(),
             body: None,
+            redirect: RedirectMode::Follow,
         }
     }
 
@@ -49,6 +60,12 @@ impl RequestOptions {
     /// Set the body.
     pub fn with_body(mut self, body: Vec<u8>) -> Self {
         self.body = Some(body);
+        self
+    }
+
+    /// Set the redirect mode.
+    pub fn with_redirect(mut self, redirect: RedirectMode) -> Self {
+        self.redirect = redirect;
         self
     }
 }
@@ -114,6 +131,7 @@ mod tests {
         assert_eq!(opts.method, http::Method::GET);
         assert!(opts.headers.is_empty());
         assert!(opts.body.is_none());
+        assert_eq!(opts.redirect, RedirectMode::Follow);
     }
 
     // -----------------------------------------------------------------------

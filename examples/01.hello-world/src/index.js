@@ -1,4 +1,4 @@
-import { tunfetch } from "tunfetch";
+import { tunfetch } from "tunfetch-wasm";
 
 export default {
   async fetch(request, env, ctx) {
