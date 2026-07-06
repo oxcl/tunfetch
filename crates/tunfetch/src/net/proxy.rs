@@ -1,13 +1,11 @@
-use std::fmt;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum ProxyScheme {
     Http,
     Https,
     Socks5,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Proxy {
     pub scheme: ProxyScheme,
     pub host: String,
@@ -16,26 +14,17 @@ pub struct Proxy {
     pub password: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum ProxyError {
+    #[error("invalid proxy scheme: {0}")]
     InvalidScheme(String),
+
+    #[error("proxy URL has no host")]
     MissingHost,
+
+    #[error("invalid proxy URL: {0}")]
     InvalidUrl(String),
-    MissingPort,
 }
-
-impl fmt::Display for ProxyError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ProxyError::InvalidScheme(s) => write!(f, "invalid proxy scheme: {s}"),
-            ProxyError::MissingHost => write!(f, "proxy URL has no host"),
-            ProxyError::InvalidUrl(msg) => write!(f, "invalid proxy URL: {msg}"),
-            ProxyError::MissingPort => write!(f, "proxy URL has no port"),
-        }
-    }
-}
-
-impl std::error::Error for ProxyError {}
 
 impl Proxy {
     pub fn from_url(url: &str) -> Result<Self, ProxyError> {
@@ -118,19 +107,19 @@ mod tests {
     #[test]
     fn parse_socks5_scheme() {
         let proxy = Proxy::from_url("socks5://proxy.example.com:1080").unwrap();
-        assert_eq!(proxy.scheme, ProxyScheme::Socks5);
+        assert!(matches!(proxy.scheme, ProxyScheme::Socks5));
     }
 
     #[test]
     fn parse_http_scheme() {
         let proxy = Proxy::from_url("http://proxy.example.com:8080").unwrap();
-        assert_eq!(proxy.scheme, ProxyScheme::Http);
+        assert!(matches!(proxy.scheme, ProxyScheme::Http));
     }
 
     #[test]
     fn parse_https_scheme() {
         let proxy = Proxy::from_url("https://proxy.example.com:8443").unwrap();
-        assert_eq!(proxy.scheme, ProxyScheme::Https);
+        assert!(matches!(proxy.scheme, ProxyScheme::Https));
     }
 
     #[test]
@@ -225,7 +214,7 @@ mod tests {
     #[test]
     fn trim_whitespace() {
         let proxy = Proxy::from_url("  socks5://proxy.example.com:1080  ").unwrap();
-        assert_eq!(proxy.scheme, ProxyScheme::Socks5);
+        assert!(matches!(proxy.scheme, ProxyScheme::Socks5));
         assert_eq!(proxy.host, "proxy.example.com");
     }
 

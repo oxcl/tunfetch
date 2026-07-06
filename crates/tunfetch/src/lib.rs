@@ -1,10 +1,9 @@
-pub mod core;
+pub mod net;
 
-use core::request::{RequestError, RequestOptions};
-use core::proxy::Proxy;
+use net::request::{build_request, RequestOptions};
+use net::proxy::Proxy;
 
-use bytes::Bytes;
-use http_body_util::{BodyExt, Full};
+use http_body_util::BodyExt;
 use hyper::client::conn::http1;
 use hyper_util::rt::TokioIo;
 use wasm_bindgen::prelude::*;
@@ -12,13 +11,11 @@ use worker::Socket;
 
 #[derive(Debug)]
 enum TunfetchError {
-    Request(RequestError),
-    Proxy(core::proxy::ProxyError),
-    Connect(core::connect::ConnectError),
+    Request(net::request::RequestError),
+    Proxy(net::proxy::ProxyError),
+    Connect(net::connect::ConnectError),
     Hyper(hyper::Error),
-    Http(hyper::http::Error),
     Js(JsValue),
-    NoHost,
 }
 
 impl std::fmt::Display for TunfetchError {
@@ -28,9 +25,7 @@ impl std::fmt::Display for TunfetchError {
             TunfetchError::Proxy(e) => write!(f, "{e}"),
             TunfetchError::Connect(e) => write!(f, "{e}"),
             TunfetchError::Hyper(e) => write!(f, "hyper error: {e}"),
-            TunfetchError::Http(e) => write!(f, "HTTP error: {e}"),
             TunfetchError::Js(e) => write!(f, "JS error: {:?}", e),
-            TunfetchError::NoHost => write!(f, "URL has no host"),
         }
     }
 }
@@ -73,11 +68,6 @@ fn parse_opts(opts: &JsValue) -> Result<(RequestOptions, Option<Proxy>), Tunfetc
         if let Ok(body_js) = js_sys::Reflect::get(opts_obj, &"body".into()) {
             if let Some(body_str) = body_js.as_string() {
                 request_opts = request_opts.with_body(body_str.into_bytes());
-            } else if !body_js.is_undefined() && !body_js.is_null() {
-                // Try to convert to string as fallback
-                if let Some(body_str) = body_js.as_string() {
-                    request_opts = request_opts.with_body(body_str.into_bytes());
-                }
             }
         }
 
@@ -108,38 +98,14 @@ pub async fn tunfetch(url: String, opts: JsValue) -> Result<JsValue, JsValue> {
 
     let target_host = uri
         .host()
-        .ok_or(TunfetchError::NoHost)?
+        .ok_or_else(|| TunfetchError::Js(JsValue::from_str("URL has no host")))?
         .to_string();
     let target_port = uri.port_u16().unwrap_or(80);
 
-    // 3. Build the request body
-    let body_bytes = request_opts.body.clone().unwrap_or_default();
-    let request_body = Full::new(Bytes::from(body_bytes));
+    // 3. Build the request
+    let request = build_request(&url, &request_opts).map_err(TunfetchError::Request)?;
 
-    // 4. Build the request with the body type
-    let uri: hyper::Uri = url.parse().map_err(|e: hyper::http::uri::InvalidUri| {
-        JsValue::from_str(&e.to_string())
-    })?;
-
-    let mut builder = hyper::Request::builder()
-        .method(&request_opts.method)
-        .uri(&uri);
-
-    // Add all headers from options
-    for (key, value) in &request_opts.headers {
-        builder = builder.header(key.as_str(), value.as_str());
-    }
-
-    // Set Host header if not already set
-    if !request_opts.headers.contains_key("host") {
-        if let Some(host) = uri.host() {
-            builder = builder.header("Host", host);
-        }
-    }
-
-    let request = builder.body(request_body).map_err(TunfetchError::Http)?;
-
-    // 5. Determine connection target
+    // 4. Determine connection target
     let (connect_host, connect_port) = if let Some(ref p) = proxy {
         (p.host.clone(), p.port)
     } else {
@@ -153,7 +119,7 @@ pub async fn tunfetch(url: String, opts: JsValue) -> Result<JsValue, JsValue> {
 
     // 7. Proxy tunnel if needed
     let socket = if let Some(ref p) = proxy {
-        core::connect::connect_through_proxy(socket, p, target_host, target_port)
+        net::connect::connect_through_proxy(socket, p, target_host, target_port)
             .await
             .map_err(TunfetchError::Connect)?
     } else {
@@ -192,11 +158,8 @@ pub async fn tunfetch(url: String, opts: JsValue) -> Result<JsValue, JsValue> {
         .to_bytes();
 
     // 13. Build JS Response
-    let js_body = js_sys::Uint8Array::from(&body_bytes[..]);
-
     let response_init = web_sys::ResponseInit::new();
     response_init.set_status(status);
-    response_init.set_status_text("OK");
 
     // Add headers
     let headers = web_sys::Headers::new().map_err(|e| TunfetchError::Js(e))?;
@@ -207,17 +170,16 @@ pub async fn tunfetch(url: String, opts: JsValue) -> Result<JsValue, JsValue> {
     }
     response_init.set_headers(&headers);
 
-    let js_response =
+    // Null body for status codes that prohibit body (1xx, 204, 304)
+    let js_response = if status == 204 || status == 304 || (status >= 100 && status < 200) {
+        web_sys::Response::new_with_opt_u8_array_and_init(None, &response_init)
+    } else {
+        let js_body = js_sys::Uint8Array::from(&body_bytes[..]);
         web_sys::Response::new_with_opt_js_u8_array_and_init(Some(&js_body), &response_init)
-            .map_err(|e| TunfetchError::Js(e))?;
+    }
+    .map_err(|e| TunfetchError::Js(e))?;
 
     Ok(JsValue::from(js_response))
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+

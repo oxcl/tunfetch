@@ -1,6 +1,7 @@
 use super::*;
-use crate::core::test_utils::MockServer;
-use crate::core::proxy::Proxy;
+use crate::net::test_utils::MockServer;
+use crate::net::proxy::Proxy;
+use crate::net::connect::ConnectError;
 
 fn http_response(status: u16) -> Vec<u8> {
     let status_line = match status {
@@ -30,7 +31,7 @@ async fn http_connect_basic() {
 
     let mut tunnel = HttpTunnel::new(
         client,
-        proxy,
+        &proxy,
         "target.example.com".to_string(),
         443,
     );
@@ -67,7 +68,7 @@ async fn http_connect_with_basic_auth() {
 
     let mut tunnel = HttpTunnel::new(
         client,
-        proxy,
+        &proxy,
         "target.example.com".to_string(),
         443,
     );
@@ -102,12 +103,12 @@ async fn http_connect_failure_407() {
 
     let mut tunnel = HttpTunnel::new(
         client,
-        proxy,
+        &proxy,
         "target.example.com".to_string(),
         443,
     );
     let err = tunnel.connect().await.unwrap_err();
-    assert!(matches!(err, HttpTunnelError::ConnectFailed(407, _)));
+    assert!(matches!(err, ConnectError::Http(HttpTunnelError::ConnectFailed(407))));
 }
 
 #[tokio::test]
@@ -124,12 +125,12 @@ async fn http_connect_failure_502() {
 
     let mut tunnel = HttpTunnel::new(
         client,
-        proxy,
+        &proxy,
         "target.example.com".to_string(),
         443,
     );
     let err = tunnel.connect().await.unwrap_err();
-    assert!(matches!(err, HttpTunnelError::ConnectFailed(502, _)));
+    assert!(matches!(err, ConnectError::Http(HttpTunnelError::ConnectFailed(502))));
 }
 
 // -----------------------------------------------------------------------
@@ -142,7 +143,7 @@ async fn into_inner_returns_stream() {
     let (client, _server) = tokio::io::duplex(1024);
     let tunnel = HttpTunnel::new(
         client,
-        proxy,
+        &proxy,
         "target.example.com".to_string(),
         443,
     );

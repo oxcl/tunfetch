@@ -19,12 +19,12 @@ impl MockServer {
         stream: &mut S,
     ) {
         for response in &self.responses {
-            let mut buf = [0u8; 2048];
-            let n = stream.read(&mut buf).await.unwrap();
+            let mut buf = vec![0u8; 8192];
+            let n = stream.read(&mut buf).await.expect("failed to read from stream");
             self.read_buf.extend_from_slice(&buf[..n]);
 
-            stream.write_all(response).await.unwrap();
-            stream.flush().await.unwrap();
+            stream.write_all(response).await.expect("failed to write to stream");
+            stream.flush().await.expect("failed to flush stream");
         }
     }
 

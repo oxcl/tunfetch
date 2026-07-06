@@ -1,37 +1,18 @@
 use super::proxy::{Proxy, ProxyScheme};
 use super::proxy_http::HttpTunnel;
 use super::proxy_socks5::Socks5Tunnel;
+use super::tunnel::Tunnel;
 
 use tokio::io::{AsyncRead, AsyncWrite};
 
 /// Errors that can occur when establishing a proxied connection.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum ConnectError {
-    Socks5(super::proxy_socks5::Socks5Error),
-    Http(super::proxy_http::HttpTunnelError),
-}
+    #[error("{0}")]
+    Socks5(#[from] super::proxy_socks5::Socks5Error),
 
-impl std::fmt::Display for ConnectError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ConnectError::Socks5(e) => write!(f, "{e}"),
-            ConnectError::Http(e) => write!(f, "{e}"),
-        }
-    }
-}
-
-impl std::error::Error for ConnectError {}
-
-impl From<super::proxy_socks5::Socks5Error> for ConnectError {
-    fn from(e: super::proxy_socks5::Socks5Error) -> Self {
-        ConnectError::Socks5(e)
-    }
-}
-
-impl From<super::proxy_http::HttpTunnelError> for ConnectError {
-    fn from(e: super::proxy_http::HttpTunnelError) -> Self {
-        ConnectError::Http(e)
-    }
+    #[error("{0}")]
+    Http(#[from] super::proxy_http::HttpTunnelError),
 }
 
 /// Establish a tunnel through the given proxy to the target host and port.
@@ -48,14 +29,12 @@ where
 {
     match proxy.scheme {
         ProxyScheme::Socks5 => {
-            let mut tunnel =
-                Socks5Tunnel::new(stream, proxy.clone(), target_host, target_port);
+            let mut tunnel = Socks5Tunnel::new(stream, proxy, target_host, target_port);
             tunnel.connect().await?;
             Ok(tunnel.into_inner())
         }
         ProxyScheme::Http | ProxyScheme::Https => {
-            let mut tunnel =
-                HttpTunnel::new(stream, proxy.clone(), target_host, target_port);
+            let mut tunnel = HttpTunnel::new(stream, proxy, target_host, target_port);
             tunnel.connect().await?;
             Ok(tunnel.into_inner())
         }
@@ -65,7 +44,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::test_utils::MockServer;
+    use crate::net::test_utils::MockServer;
 
     // -----------------------------------------------------------------------
     // SOCKS5 dispatch

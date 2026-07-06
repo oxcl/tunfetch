@@ -1,6 +1,7 @@
 use super::*;
-use crate::core::test_utils::MockServer;
-use crate::core::proxy::Proxy;
+use crate::net::test_utils::MockServer;
+use crate::net::proxy::Proxy;
+use crate::net::connect::ConnectError;
 
 // -----------------------------------------------------------------------
 // SOCKS5 handshake with no auth (method 0x00)
@@ -25,7 +26,7 @@ async fn socks5_handshake_no_auth() {
 
     let mut tunnel = Socks5Tunnel::new(
         client,
-        proxy,
+        &proxy,
         "target.example.com".to_string(),
         443,
     );
@@ -75,7 +76,7 @@ async fn socks5_handshake_with_auth() {
 
     let mut tunnel = Socks5Tunnel::new(
         client,
-        proxy,
+        &proxy,
         "target.example.com".to_string(),
         443,
     );
@@ -122,12 +123,12 @@ async fn socks5_invalid_version() {
 
     let mut tunnel = Socks5Tunnel::new(
         client,
-        proxy,
+        &proxy,
         "target.example.com".to_string(),
         443,
     );
     let err = tunnel.connect().await.unwrap_err();
-    assert!(matches!(err, Socks5Error::InvalidVersion(0x04)));
+    assert!(matches!(err, ConnectError::Socks5(Socks5Error::InvalidVersion(0x04))));
 }
 
 // -----------------------------------------------------------------------
@@ -151,12 +152,12 @@ async fn socks5_no_acceptable_methods() {
 
     let mut tunnel = Socks5Tunnel::new(
         client,
-        proxy,
+        &proxy,
         "target.example.com".to_string(),
         443,
     );
     let err = tunnel.connect().await.unwrap_err();
-    assert!(matches!(err, Socks5Error::NoAcceptableMethods));
+    assert!(matches!(err, ConnectError::Socks5(Socks5Error::NoAcceptableMethods)));
 }
 
 // -----------------------------------------------------------------------
@@ -183,12 +184,12 @@ async fn socks5_auth_failure() {
 
     let mut tunnel = Socks5Tunnel::new(
         client,
-        proxy,
+        &proxy,
         "target.example.com".to_string(),
         443,
     );
     let err = tunnel.connect().await.unwrap_err();
-    assert!(matches!(err, Socks5Error::AuthFailed));
+    assert!(matches!(err, ConnectError::Socks5(Socks5Error::AuthFailed)));
 }
 
 // -----------------------------------------------------------------------
@@ -214,12 +215,12 @@ async fn socks5_connect_failure() {
 
     let mut tunnel = Socks5Tunnel::new(
         client,
-        proxy,
+        &proxy,
         "target.example.com".to_string(),
         443,
     );
     let err = tunnel.connect().await.unwrap_err();
-    assert!(matches!(err, Socks5Error::ConnectFailed(0x05)));
+    assert!(matches!(err, ConnectError::Socks5(Socks5Error::ConnectFailed(0x05))));
 }
 
 // -----------------------------------------------------------------------
@@ -232,7 +233,7 @@ async fn into_inner_returns_stream() {
     let (client, _server) = tokio::io::duplex(1024);
     let tunnel = Socks5Tunnel::new(
         client,
-        proxy,
+        &proxy,
         "target.example.com".to_string(),
         443,
     );

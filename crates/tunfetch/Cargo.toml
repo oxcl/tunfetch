@@ -11,7 +11,9 @@ license = "LGPLv3"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+base64 = "0.22"
 bytes = "1"
+thiserror = "1"
 worker = { version = "0.8" }
 wasm-bindgen-futures = "0.4"
 wasm-bindgen = "0.2"
@@ -31,3 +33,4 @@ tokio = { version = "1", features = ["io-util"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt", "io-util"] }
+futures = "0.3"

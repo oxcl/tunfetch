@@ -1,5 +1,8 @@
 use std::collections::HashMap;
 
+use bytes::Bytes;
+use http_body_util::Full;
+
 /// Parsed request options from JavaScript.
 #[derive(Debug)]
 pub struct RequestOptions {
@@ -9,22 +12,14 @@ pub struct RequestOptions {
 }
 
 /// Errors that can occur when building a request.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum RequestError {
+    #[error("invalid HTTP method: {0}")]
     InvalidMethod(String),
+
+    #[error("invalid URL: {0}")]
     InvalidUrl(String),
 }
-
-impl std::fmt::Display for RequestError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            RequestError::InvalidMethod(m) => write!(f, "invalid HTTP method: {m}"),
-            RequestError::InvalidUrl(u) => write!(f, "invalid URL: {u}"),
-        }
-    }
-}
-
-impl std::error::Error for RequestError {}
 
 impl RequestOptions {
     /// Create a new RequestOptions with default values (GET, no body).
@@ -62,12 +57,13 @@ impl RequestOptions {
 pub fn build_request(
     url: &str,
     opts: &RequestOptions,
-) -> Result<http::Request<Vec<u8>>, RequestError> {
+) -> Result<http::Request<Full<Bytes>>, RequestError> {
     let uri: http::Uri = url
         .parse()
         .map_err(|_| RequestError::InvalidUrl(url.to_string()))?;
 
     let body = opts.body.clone().unwrap_or_default();
+    let request_body = Full::new(Bytes::from(body));
 
     let mut builder = http::Request::builder().method(&opts.method).uri(&uri);
 
@@ -79,18 +75,34 @@ pub fn build_request(
     // Set Host header if not already set
     if !opts.headers.contains_key("host") {
         if let Some(host) = uri.host() {
-            builder = builder.header("Host", host);
+            // Include port in Host header if it's non-default
+            let host_str = match uri.port_u16() {
+                Some(port) => {
+                    let default_port = match uri.scheme_str() {
+                        Some("https") => 443,
+                        _ => 80, // HTTP default
+                    };
+                    if port == default_port {
+                        host.to_string()
+                    } else {
+                        format!("{host}:{port}")
+                    }
+                }
+                None => host.to_string(),
+            };
+            builder = builder.header("Host", &host_str);
         }
     }
 
     builder
-        .body(body)
+        .body(request_body)
         .map_err(|_| RequestError::InvalidUrl(url.to_string()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use http_body_util::BodyExt;
 
     // -----------------------------------------------------------------------
     // Default request
@@ -109,33 +121,19 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn parse_get_method() {
-        let opts = RequestOptions::new().with_method("GET").unwrap();
-        assert_eq!(opts.method, http::Method::GET);
-    }
+    fn parse_standard_methods() {
+        let methods = &[
+            ("GET", http::Method::GET),
+            ("POST", http::Method::POST),
+            ("PUT", http::Method::PUT),
+            ("DELETE", http::Method::DELETE),
+            ("PATCH", http::Method::PATCH),
+        ];
 
-    #[test]
-    fn parse_post_method() {
-        let opts = RequestOptions::new().with_method("POST").unwrap();
-        assert_eq!(opts.method, http::Method::POST);
-    }
-
-    #[test]
-    fn parse_put_method() {
-        let opts = RequestOptions::new().with_method("PUT").unwrap();
-        assert_eq!(opts.method, http::Method::PUT);
-    }
-
-    #[test]
-    fn parse_delete_method() {
-        let opts = RequestOptions::new().with_method("DELETE").unwrap();
-        assert_eq!(opts.method, http::Method::DELETE);
-    }
-
-    #[test]
-    fn parse_patch_method() {
-        let opts = RequestOptions::new().with_method("PATCH").unwrap();
-        assert_eq!(opts.method, http::Method::PATCH);
+        for (method_str, expected) in methods {
+            let opts = RequestOptions::new().with_method(method_str).unwrap();
+            assert_eq!(opts.method, *expected, "Failed for method: {method_str}");
+        }
     }
 
     #[test]
@@ -196,7 +194,10 @@ mod tests {
             req.headers().get("Host").unwrap().to_str().unwrap(),
             "example.com"
         );
-        assert!(req.body().is_empty());
+        // Body is an empty Full<Bytes>
+        let body = req.into_body();
+        let collected = futures::executor::block_on(body.collect()).unwrap();
+        assert!(collected.to_bytes().is_empty());
     }
 
     #[test]
@@ -213,7 +214,10 @@ mod tests {
             req.headers().get("Content-Type").unwrap().to_str().unwrap(),
             "application/json"
         );
-        assert_eq!(req.body(), b"{\"key\":\"value\"}");
+        // Body contains the expected bytes
+        let body = req.into_body();
+        let collected = futures::executor::block_on(body.collect()).unwrap();
+        assert_eq!(&collected.to_bytes()[..], b"{\"key\":\"value\"}");
     }
 
     #[test]
@@ -232,7 +236,7 @@ mod tests {
         let req = build_request("http://localhost:8080/path", &opts).unwrap();
         assert_eq!(
             req.headers().get("Host").unwrap().to_str().unwrap(),
-            "localhost"
+            "localhost:8080"
         );
     }
 
