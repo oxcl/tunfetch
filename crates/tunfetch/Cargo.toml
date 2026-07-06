@@ -19,3 +19,7 @@ hyper-util = { version = "0.1", default-features = false, features = ["tokio"] }
 http-body-util = "0.1"
 console_error_panic_hook = "0.1"
 web-sys = { version = "0.3.103", features = ["console"] }
+tokio = { version = "1", features = ["io-util"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "io-util"] }

@@ -1,3 +1,5 @@
+pub mod core;
+
 use wasm_bindgen::prelude::*;
 use worker::Socket;
 use hyper::client::conn::http1;
