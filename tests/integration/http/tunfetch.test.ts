@@ -1,18 +1,19 @@
 import { describe, it, expect } from "vitest";
+import { tunfetch } from "../../../crates/tunfetch/pkg/tunfetch";
 
 // httpbin is started on this port by global-setup.ts
 const HTTPBIN_URL = "http://localhost:18080";
 
 // ---------------------------------------------------------------------------
-// 1. Native fetch & basic contract
+// 1. tunfetch & basic contract
 // ---------------------------------------------------------------------------
-describe("native fetch exports", () => {
-  it("exports fetch as a function", () => {
-    expect(typeof fetch).toBe("function");
+describe("tunfetch exports", () => {
+  it("exports tunfetch as a function", () => {
+    expect(typeof tunfetch).toBe("function");
   });
 
-  it("fetch returns a Promise", () => {
-    const result = fetch(`${HTTPBIN_URL}/get`);
+  it("tunfetch returns a Promise", () => {
+    const result = tunfetch(`${HTTPBIN_URL}/get`);
     expect(result).toBeInstanceOf(Promise);
     // Clean up – we don't care about the result here
     result.catch(() => {});
@@ -20,11 +21,11 @@ describe("native fetch exports", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. HTTPBIN sanity check (native fetch – proves the container is alive)
+// 2. HTTPBIN sanity check (proves the container is alive)
 // ---------------------------------------------------------------------------
 describe("httpbin sanity", () => {
-  it("native fetch can reach httpbin /get", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/get`);
+  it("tunfetch can reach httpbin /get", async () => {
+    const res = await tunfetch(`${HTTPBIN_URL}/get`);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data).toBeDefined();
@@ -32,11 +33,11 @@ describe("httpbin sanity", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. fetch – basic GET
+// 3. tunfetch – basic GET
 // ---------------------------------------------------------------------------
-describe("fetch GET", () => {
+describe("tunfetch GET", () => {
   it("performs a basic GET and returns a Response-like object", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/get`);
+    const res = await tunfetch(`${HTTPBIN_URL}/get`);
     // The final API should return a Response (or Response-like object).
     // For now the impl returns a string, so this test captures the
     // desired end-state. It will fail until the impl is updated.
@@ -45,33 +46,33 @@ describe("fetch GET", () => {
   });
 
   it("response body contains the url field from httpbin", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/get`);
+    const res = await tunfetch(`${HTTPBIN_URL}/get`);
     const data = await res.json();
     expect(data.url).toBe(`${HTTPBIN_URL}/get`);
   });
 });
 
 // ---------------------------------------------------------------------------
-// 4. fetch – status codes
+// 4. tunfetch – status codes
 // ---------------------------------------------------------------------------
-describe("fetch status codes", () => {
+describe("tunfetch status codes", () => {
   it("returns 200 for /status/200", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/status/200`);
+    const res = await tunfetch(`${HTTPBIN_URL}/status/200`);
     expect(res.status).toBe(200);
   });
 
   it("returns 404 for /status/404", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/status/404`);
+    const res = await tunfetch(`${HTTPBIN_URL}/status/404`);
     expect(res.status).toBe(404);
   });
 
   it("returns 500 for /status/500", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/status/500`);
+    const res = await tunfetch(`${HTTPBIN_URL}/status/500`);
     expect(res.status).toBe(500);
   });
 
   it("returns 301 for /status/301 with redirect: manual", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/status/301`, {
+    const res = await tunfetch(`${HTTPBIN_URL}/status/301`, {
       redirect: "manual",
     });
     expect(res.status).toBe(301);
@@ -79,21 +80,21 @@ describe("fetch status codes", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. fetch – request headers echo
+// 5. tunfetch – request headers echo
 // ---------------------------------------------------------------------------
-describe("fetch headers", () => {
+describe("tunfetch headers", () => {
   it("sends custom headers that httpbin echoes back", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/headers`, {
-      headers: { "X-Custom-Header": "fetch-test" },
+    const res = await tunfetch(`${HTTPBIN_URL}/headers`, {
+      headers: { "X-Custom-Header": "tunfetch-test" },
     });
     expect(res.status).toBe(200);
 
     const data = await res.json();
-    expect(data.headers["X-Custom-Header"]).toBe("fetch-test");
+    expect(data.headers["X-Custom-Header"]).toBe("tunfetch-test");
   });
 
   it("sends multiple custom headers", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/headers`, {
+    const res = await tunfetch(`${HTTPBIN_URL}/headers`, {
       headers: {
         "X-First": "one",
         "X-Second": "two",
@@ -106,12 +107,12 @@ describe("fetch headers", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 6. fetch – POST with body
+// 6. tunfetch – POST with body
 // ---------------------------------------------------------------------------
-describe("fetch POST", () => {
+describe("tunfetch POST", () => {
   it("sends a POST request with a JSON body", async () => {
-    const payload = { message: "hello from fetch" };
-    const res = await fetch(`${HTTPBIN_URL}/post`, {
+    const payload = { message: "hello from tunfetch" };
+    const res = await tunfetch(`${HTTPBIN_URL}/post`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -124,7 +125,7 @@ describe("fetch POST", () => {
   });
 
   it("sends a POST with a plain text body", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/post`, {
+    const res = await tunfetch(`${HTTPBIN_URL}/post`, {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
       body: "raw text payload",
@@ -137,11 +138,11 @@ describe("fetch POST", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 7. fetch – query parameters
+// 7. tunfetch – query parameters
 // ---------------------------------------------------------------------------
-describe("fetch query parameters", () => {
+describe("tunfetch query parameters", () => {
   it("sends query parameters via URL", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/get?foo=bar&baz=qux`);
+    const res = await tunfetch(`${HTTPBIN_URL}/get?foo=bar&baz=qux`);
     expect(res.status).toBe(200);
 
     const data = await res.json();
@@ -150,11 +151,11 @@ describe("fetch query parameters", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 8. fetch – response body parsing
+// 8. tunfetch – response body parsing
 // ---------------------------------------------------------------------------
-describe("fetch response body", () => {
+describe("tunfetch response body", () => {
   it("can read response as text", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/ip`);
+    const res = await tunfetch(`${HTTPBIN_URL}/ip`);
     expect(res.status).toBe(200);
 
     const text = await res.text();
@@ -165,7 +166,7 @@ describe("fetch response body", () => {
   });
 
   it("can read response as JSON", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/ip`);
+    const res = await tunfetch(`${HTTPBIN_URL}/ip`);
     const data = await res.json();
     expect(data).toHaveProperty("origin");
     expect(typeof data.origin).toBe("string");
@@ -173,26 +174,26 @@ describe("fetch response body", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 9. fetch – user-agent
+// 9. tunfetch – user-agent
 // ---------------------------------------------------------------------------
-describe("fetch user-agent", () => {
+describe("tunfetch user-agent", () => {
   it("httpbin echoes back the User-Agent header", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/user-agent`, {
-      headers: { "User-Agent": "fetch-test-agent/1.0" },
+    const res = await tunfetch(`${HTTPBIN_URL}/user-agent`, {
+      headers: { "User-Agent": "tunfetch-test-agent/1.0" },
     });
     expect(res.status).toBe(200);
 
     const data = await res.json();
-    expect(data["user-agent"]).toBe("fetch-test-agent/1.0");
+    expect(data["user-agent"]).toBe("tunfetch-test-agent/1.0");
   });
 });
 
 // ---------------------------------------------------------------------------
-// 10. fetch – cookies
+// 10. tunfetch – cookies
 // ---------------------------------------------------------------------------
-describe("fetch cookies", () => {
+describe("tunfetch cookies", () => {
   it("sends cookies that httpbin echoes back", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/cookies`, {
+    const res = await tunfetch(`${HTTPBIN_URL}/cookies`, {
       headers: { Cookie: "session=abc123; theme=dark" },
     });
     expect(res.status).toBe(200);
@@ -204,27 +205,27 @@ describe("fetch cookies", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 11. fetch – redirect handling
+// 11. tunfetch – redirect handling
 // ---------------------------------------------------------------------------
-describe("fetch redirects", () => {
+describe("tunfetch redirects", () => {
   it("follows a single redirect", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/redirect/1`);
+    const res = await tunfetch(`${HTTPBIN_URL}/redirect/1`);
     // After following 1 redirect, we should land on /get with 200
     expect(res.status).toBe(200);
   });
 
   it("follows multiple redirects", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/redirect/3`);
+    const res = await tunfetch(`${HTTPBIN_URL}/redirect/3`);
     expect(res.status).toBe(200);
   });
 });
 
 // ---------------------------------------------------------------------------
-// 12. fetch – gzip / encoding
+// 12. tunfetch – gzip / encoding
 // ---------------------------------------------------------------------------
-describe("fetch encoding", () => {
+describe("tunfetch encoding", () => {
   it("handles gzip-encoded response", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/gzip`);
+    const res = await tunfetch(`${HTTPBIN_URL}/gzip`);
     expect(res.status).toBe(200);
 
     const data = await res.json();
@@ -233,28 +234,28 @@ describe("fetch encoding", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 13. fetch – error handling
+// 13. tunfetch – error handling
 // ---------------------------------------------------------------------------
-describe("fetch error handling", () => {
+describe("tunfetch error handling", () => {
   it("rejects on invalid URL", async () => {
-    await expect(fetch("not-a-valid-url")).rejects.toThrow();
+    await expect(tunfetch("not-a-valid-url")).rejects.toThrow();
   });
 
   it("rejects when signal is aborted", async () => {
     const controller = new AbortController();
     setTimeout(() => controller.abort(), 1);
     await expect(
-      fetch(`${HTTPBIN_URL}/delay/5`, { signal: controller.signal })
+      tunfetch(`${HTTPBIN_URL}/delay/5`, { signal: controller.signal })
     ).rejects.toThrow();
   });
 });
 
 // ---------------------------------------------------------------------------
-// 14. fetch – HTTP methods
+// 14. tunfetch – HTTP methods
 // ---------------------------------------------------------------------------
-describe("fetch HTTP methods", () => {
+describe("tunfetch HTTP methods", () => {
   it("sends a PUT request", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/put`, {
+    const res = await tunfetch(`${HTTPBIN_URL}/put`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ key: "value" }),
@@ -263,14 +264,14 @@ describe("fetch HTTP methods", () => {
   });
 
   it("sends a DELETE request", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/delete`, {
+    const res = await tunfetch(`${HTTPBIN_URL}/delete`, {
       method: "DELETE",
     });
     expect(res.status).toBe(200);
   });
 
   it("sends a PATCH request", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/patch`, {
+    const res = await tunfetch(`${HTTPBIN_URL}/patch`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ patch: true }),
@@ -280,31 +281,31 @@ describe("fetch HTTP methods", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 15. fetch – response headers
+// 15. tunfetch – response headers
 // ---------------------------------------------------------------------------
-describe("fetch response headers", () => {
+describe("tunfetch response headers", () => {
   it("can read response headers", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/get`);
+    const res = await tunfetch(`${HTTPBIN_URL}/get`);
     expect(res.status).toBe(200);
     // The response should have standard HTTP headers
     expect(res.headers).toBeDefined();
   });
 
   it("server can set custom response headers via /response-headers", async () => {
-    const res = await fetch(
-      `${HTTPBIN_URL}/response-headers?X-fetch-Test=hello`
+    const res = await tunfetch(
+      `${HTTPBIN_URL}/response-headers?X-Tunfetch-Test=hello`
     );
     expect(res.status).toBe(200);
-    expect(res.headers.get("X-fetch-Test")).toBe("hello");
+    expect(res.headers.get("X-Tunfetch-Test")).toBe("hello");
   });
 });
 
 // ---------------------------------------------------------------------------
-// 16. fetch – /anything catch-all
+// 16. tunfetch – /anything catch-all
 // ---------------------------------------------------------------------------
-describe("fetch /anything", () => {
+describe("tunfetch /anything", () => {
   it("GET /anything echoes request data", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/anything`);
+    const res = await tunfetch(`${HTTPBIN_URL}/anything`);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.method).toBe("GET");
@@ -312,7 +313,7 @@ describe("fetch /anything", () => {
   });
 
   it("POST /anything echoes body and method", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/anything/test-path`, {
+    const res = await tunfetch(`${HTTPBIN_URL}/anything/test-path`, {
       method: "POST",
       body: "anything-body",
     });
@@ -324,7 +325,7 @@ describe("fetch /anything", () => {
   });
 
   it("PUT /anything works", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/anything`, {
+    const res = await tunfetch(`${HTTPBIN_URL}/anything`, {
       method: "PUT",
       body: "put-body",
     });
@@ -334,7 +335,7 @@ describe("fetch /anything", () => {
   });
 
   it("DELETE /anything works", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/anything`, {
+    const res = await tunfetch(`${HTTPBIN_URL}/anything`, {
       method: "DELETE",
     });
     expect(res.status).toBe(200);
@@ -343,7 +344,7 @@ describe("fetch /anything", () => {
   });
 
   it("PATCH /anything works", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/anything`, {
+    const res = await tunfetch(`${HTTPBIN_URL}/anything`, {
       method: "PATCH",
       body: "patch-body",
     });
@@ -354,13 +355,13 @@ describe("fetch /anything", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 17. fetch – cookies set/delete
+// 17. tunfetch – cookies set/delete
 // ---------------------------------------------------------------------------
-describe("fetch cookie management", () => {
+describe("tunfetch cookie management", () => {
   it("sets cookies via /cookies/set and reads them back", async () => {
     // /cookies/set redirects to /cookies – with redirect: manual we can
     // verify the Set-Cookie header the server sends.
-    const res = await fetch(
+    const res = await tunfetch(
       `${HTTPBIN_URL}/cookies/set?foo=bar&baz=qux`,
       { redirect: "manual" }
     );
@@ -371,7 +372,7 @@ describe("fetch cookie management", () => {
   });
 
   it("sets a named cookie via /cookies/set/{name}/{value}", async () => {
-    const res = await fetch(
+    const res = await tunfetch(
       `${HTTPBIN_URL}/cookies/set/mycookie/myvalue`,
       { redirect: "manual" }
     );
@@ -382,7 +383,7 @@ describe("fetch cookie management", () => {
 
   it("deletes cookies via /cookies/delete", async () => {
     // First set, then delete
-    const res = await fetch(
+    const res = await tunfetch(
       `${HTTPBIN_URL}/cookies/delete?to_delete=gone`
     );
     expect(res.status).toBe(200);
@@ -393,11 +394,11 @@ describe("fetch cookie management", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 18. fetch – redirect-to (custom redirect target)
+// 18. tunfetch – redirect-to (custom redirect target)
 // ---------------------------------------------------------------------------
-describe("fetch /redirect-to", () => {
+describe("tunfetch /redirect-to", () => {
   it("redirects to a specified URL", async () => {
-    const res = await fetch(
+    const res = await tunfetch(
       `${HTTPBIN_URL}/redirect-to?url=${HTTPBIN_URL}/get`
     );
     expect(res.status).toBe(200);
@@ -406,21 +407,21 @@ describe("fetch /redirect-to", () => {
   });
 
   it("redirects with a custom status code", async () => {
-    const res = await fetch(
+    const res = await tunfetch(
       `${HTTPBIN_URL}/redirect-to?url=${HTTPBIN_URL}/get&status_code=302`
     );
     expect(res.status).toBe(200);
   });
 
   it("supports relative redirect", async () => {
-    const res = await fetch(
+    const res = await tunfetch(
       `${HTTPBIN_URL}/relative-redirect/2`
     );
     expect(res.status).toBe(200);
   });
 
   it("supports absolute redirect", async () => {
-    const res = await fetch(
+    const res = await tunfetch(
       `${HTTPBIN_URL}/absolute-redirect/2`
     );
     expect(res.status).toBe(200);
@@ -428,25 +429,25 @@ describe("fetch /redirect-to", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 19. fetch – response formats
+// 19. tunfetch – response formats
 // ---------------------------------------------------------------------------
-describe("fetch response formats", () => {
+describe("tunfetch response formats", () => {
   it("returns HTML from /html", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/html`);
+    const res = await tunfetch(`${HTTPBIN_URL}/html`);
     expect(res.status).toBe(200);
     const text = await res.text();
     expect(text).toContain("<!DOCTYPE html>");
   });
 
   it("returns XML from /xml", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/xml`);
+    const res = await tunfetch(`${HTTPBIN_URL}/xml`);
     expect(res.status).toBe(200);
     const text = await res.text();
     expect(text).toContain("<?xml");
   });
 
   it("returns JSON from /json", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/json`);
+    const res = await tunfetch(`${HTTPBIN_URL}/json`);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data).toBeDefined();
@@ -455,21 +456,21 @@ describe("fetch response formats", () => {
   });
 
   it("returns robots.txt from /robots.txt", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/robots.txt`);
+    const res = await tunfetch(`${HTTPBIN_URL}/robots.txt`);
     expect(res.status).toBe(200);
     const text = await res.text();
     expect(text).toContain("User-agent");
   });
 
   it("returns denial message from /deny", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/deny`);
+    const res = await tunfetch(`${HTTPBIN_URL}/deny`);
     expect(res.status).toBe(200);
     const text = await res.text();
     expect(text).toContain("YOU SHOULDN'T BE HERE");
   });
 
   it("returns UTF-8 content from /encoding/utf8", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/encoding/utf8`);
+    const res = await tunfetch(`${HTTPBIN_URL}/encoding/utf8`);
     expect(res.status).toBe(200);
     const text = await res.text();
     // Should contain multi-byte UTF-8 characters
@@ -478,11 +479,11 @@ describe("fetch response formats", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 20. fetch – compression encodings
+// 20. tunfetch – compression encodings
 // ---------------------------------------------------------------------------
-describe("fetch compression", () => {
+describe("tunfetch compression", () => {
   it("handles deflate-encoded response", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/deflate`);
+    const res = await tunfetch(`${HTTPBIN_URL}/deflate`);
     expect(res.status).toBe(200);
     // Workers fetch auto-decompresses gzip but not deflate;
     // the response may be raw bytes or decompressed JSON depending
@@ -492,7 +493,7 @@ describe("fetch compression", () => {
   });
 
   it("handles brotli-encoded response", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/brotli`);
+    const res = await tunfetch(`${HTTPBIN_URL}/brotli`);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.brotli).toBe(true);
@@ -500,11 +501,11 @@ describe("fetch compression", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 21. fetch – dynamic data generation
+// 21. tunfetch – dynamic data generation
 // ---------------------------------------------------------------------------
-describe("fetch dynamic data", () => {
+describe("tunfetch dynamic data", () => {
   it("returns a UUID from /uuid", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/uuid`);
+    const res = await tunfetch(`${HTTPBIN_URL}/uuid`);
     expect(res.status).toBe(200);
     const data = await res.json();
     // UUID4 format: 8-4-4-4-12 hex characters
@@ -514,15 +515,15 @@ describe("fetch dynamic data", () => {
   });
 
   it("decodes base64 from /base64/{value}", async () => {
-    const encoded = btoa("hello fetch");
-    const res = await fetch(`${HTTPBIN_URL}/base64/${encoded}`);
+    const encoded = btoa("hello tunfetch");
+    const res = await tunfetch(`${HTTPBIN_URL}/base64/${encoded}`);
     expect(res.status).toBe(200);
     const text = await res.text();
-    expect(text).toBe("hello fetch");
+    expect(text).toBe("hello tunfetch");
   });
 
   it("returns n random bytes from /bytes/{n}", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/bytes/256`);
+    const res = await tunfetch(`${HTTPBIN_URL}/bytes/256`);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("application/octet-stream");
     const buffer = await res.arrayBuffer();
@@ -530,7 +531,7 @@ describe("fetch dynamic data", () => {
   });
 
   it("returns a single JSON object from /stream/1", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/stream/1`);
+    const res = await tunfetch(`${HTTPBIN_URL}/stream/1`);
     expect(res.status).toBe(200);
     const text = await res.text();
     // /stream/n returns n JSON objects, one per line
@@ -541,7 +542,7 @@ describe("fetch dynamic data", () => {
   });
 
   it("returns multiple JSON objects from /stream/3", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/stream/3`);
+    const res = await tunfetch(`${HTTPBIN_URL}/stream/3`);
     expect(res.status).toBe(200);
     const text = await res.text();
     const lines = text.trim().split("\n");
@@ -550,12 +551,12 @@ describe("fetch dynamic data", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 22. fetch – delay / timeout
+// 22. tunfetch – delay / timeout
 // ---------------------------------------------------------------------------
-describe("fetch delay", () => {
+describe("tunfetch delay", () => {
   it("handles /delay/1 (1 second delay)", async () => {
     const start = Date.now();
-    const res = await fetch(`${HTTPBIN_URL}/delay/1`);
+    const res = await tunfetch(`${HTTPBIN_URL}/delay/1`);
     const elapsed = Date.now() - start;
     expect(res.status).toBe(200);
     expect(elapsed).toBeGreaterThanOrEqual(900); // allow some tolerance
@@ -563,7 +564,7 @@ describe("fetch delay", () => {
 
   it("handles /delay/2 (2 second delay)", async () => {
     const start = Date.now();
-    const res = await fetch(`${HTTPBIN_URL}/delay/2`);
+    const res = await tunfetch(`${HTTPBIN_URL}/delay/2`);
     const elapsed = Date.now() - start;
     expect(res.status).toBe(200);
     expect(elapsed).toBeGreaterThanOrEqual(1800);
@@ -571,18 +572,18 @@ describe("fetch delay", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 23. fetch – links
+// 23. tunfetch – links
 // ---------------------------------------------------------------------------
-describe("fetch links", () => {
+describe("tunfetch links", () => {
   it("returns HTML links page from /links/{n}/{offset}", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/links/10/0`);
+    const res = await tunfetch(`${HTTPBIN_URL}/links/10/0`);
     expect(res.status).toBe(200);
     const text = await res.text();
     expect(text).toContain("<a");
   });
 
   it("offset link is non-existent (404)", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/links/10/0`);
+    const res = await tunfetch(`${HTTPBIN_URL}/links/10/0`);
     expect(res.status).toBe(200);
     // The page lists links 1–10; link 0 is the offset and is
     // rendered as plain text (not a clickable link).
@@ -592,42 +593,42 @@ describe("fetch links", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 24. fetch – cache / etag
+// 24. tunfetch – cache / etag
 // ---------------------------------------------------------------------------
-describe("fetch cache behavior", () => {
+describe("tunfetch cache behavior", () => {
   it("returns 200 from /cache without cache headers", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/cache`);
+    const res = await tunfetch(`${HTTPBIN_URL}/cache`);
     expect(res.status).toBe(200);
   });
 
   it("returns 304 from /cache with If-Modified-Since in the past", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/cache`, {
+    const res = await tunfetch(`${HTTPBIN_URL}/cache`, {
       headers: { "If-Modified-Since": "Thu, 01 Jan 2000 00:00:00 GMT" },
     });
     expect(res.status).toBe(304);
   });
 
   it("returns 304 from /cache with If-None-Match", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/cache`, {
+    const res = await tunfetch(`${HTTPBIN_URL}/cache`, {
       headers: { "If-None-Match": '"some-etag"' },
     });
     expect(res.status).toBe(304);
   });
 
   it("/etag returns 200 without matching If-Match", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/etag/myetag`);
+    const res = await tunfetch(`${HTTPBIN_URL}/etag/myetag`);
     expect(res.status).toBe(200);
   });
 
   it("/etag returns 412 with mismatched If-Match", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/etag/myetag`, {
+    const res = await tunfetch(`${HTTPBIN_URL}/etag/myetag`, {
       headers: { "If-Match": '"wrong-etag"' },
     });
     expect(res.status).toBe(412);
   });
 
   it("/etag returns 304 with matching If-None-Match", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/etag/myetag`, {
+    const res = await tunfetch(`${HTTPBIN_URL}/etag/myetag`, {
       headers: { "If-None-Match": '"myetag"' },
     });
     expect(res.status).toBe(304);
@@ -635,22 +636,22 @@ describe("fetch cache behavior", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 25. fetch – authentication endpoints (expect 401)
+// 25. tunfetch – authentication endpoints (expect 401)
 // ---------------------------------------------------------------------------
-describe("fetch authentication", () => {
+describe("tunfetch authentication", () => {
   it("returns 401 from /basic-auth without credentials", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/basic-auth/user/pass`);
+    const res = await tunfetch(`${HTTPBIN_URL}/basic-auth/user/pass`);
     expect(res.status).toBe(401);
   });
 
   it("returns 401 from /bearer without token", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/bearer`);
+    const res = await tunfetch(`${HTTPBIN_URL}/bearer`);
     expect(res.status).toBe(401);
   });
 
   it("returns 200 from /basic-auth with correct credentials", async () => {
     const credentials = btoa("user:pass");
-    const res = await fetch(`${HTTPBIN_URL}/basic-auth/user/pass`, {
+    const res = await tunfetch(`${HTTPBIN_URL}/basic-auth/user/pass`, {
       headers: { Authorization: `Basic ${credentials}` },
     });
     expect(res.status).toBe(200);
@@ -660,7 +661,7 @@ describe("fetch authentication", () => {
   });
 
   it("returns 200 from /bearer with correct token", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/bearer`, {
+    const res = await tunfetch(`${HTTPBIN_URL}/bearer`, {
       headers: { Authorization: "Bearer my-token-123" },
     });
     expect(res.status).toBe(200);
@@ -670,11 +671,11 @@ describe("fetch authentication", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 26. fetch – streaming bytes
+// 26. tunfetch – streaming bytes
 // ---------------------------------------------------------------------------
-describe("fetch streaming", () => {
+describe("tunfetch streaming", () => {
   it("streams bytes from /stream-bytes/{n}", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/stream-bytes/1024`);
+    const res = await tunfetch(`${HTTPBIN_URL}/stream-bytes/1024`);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("application/octet-stream");
     const buffer = await res.arrayBuffer();
@@ -682,7 +683,7 @@ describe("fetch streaming", () => {
   });
 
   it("handles /range/{n} for byte range requests", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/range/1024`);
+    const res = await tunfetch(`${HTTPBIN_URL}/range/1024`);
     expect(res.status).toBe(200);
     const buffer = await res.arrayBuffer();
     expect(buffer.byteLength).toBeGreaterThan(0);
@@ -690,13 +691,13 @@ describe("fetch streaming", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 27. fetch – drip (slow data transfer)
+// 27. tunfetch – drip (slow data transfer)
 // ---------------------------------------------------------------------------
-describe("fetch drip", () => {
+describe("tunfetch drip", () => {
   it("returns the requested number of bytes", async () => {
     // Workers fetch buffers the entire response, so the drip duration
     // is not observable. We only verify the payload arrives intact.
-    const res = await fetch(
+    const res = await tunfetch(
       `${HTTPBIN_URL}/drip?numbytes=10&duration=1&delay=0`
     );
     expect(res.status).toBe(200);
@@ -706,11 +707,11 @@ describe("fetch drip", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 28. fetch – image endpoints (binary response)
+// 28. tunfetch – image endpoints (binary response)
 // ---------------------------------------------------------------------------
-describe("fetch images", () => {
+describe("tunfetch images", () => {
   it("returns a PNG image from /image/png", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/image/png`);
+    const res = await tunfetch(`${HTTPBIN_URL}/image/png`);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("image/png");
     const buffer = await res.arrayBuffer();
@@ -718,25 +719,25 @@ describe("fetch images", () => {
   });
 
   it("returns a JPEG image from /image/jpeg", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/image/jpeg`);
+    const res = await tunfetch(`${HTTPBIN_URL}/image/jpeg`);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("image/jpeg");
   });
 
   it("returns a WEBP image from /image/webp", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/image/webp`);
+    const res = await tunfetch(`${HTTPBIN_URL}/image/webp`);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("image/webp");
   });
 
   it("returns an SVG image from /image/svg", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/image/svg`);
+    const res = await tunfetch(`${HTTPBIN_URL}/image/svg`);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("image/svg+xml");
   });
 
   it("returns appropriate image based on Accept header via /image", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/image`, {
+    const res = await tunfetch(`${HTTPBIN_URL}/image`, {
       headers: { Accept: "image/png" },
     });
     expect(res.status).toBe(200);
@@ -745,38 +746,38 @@ describe("fetch images", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 29. fetch – status code combinations
+// 29. tunfetch – status code combinations
 // ---------------------------------------------------------------------------
-describe("fetch status code combinations", () => {
+describe("tunfetch status code combinations", () => {
   it("handles weighted status codes", async () => {
     // /status/200:2,404:1 should sometimes return 200, sometimes 404
     // We just verify it returns a valid status
-    const res = await fetch(`${HTTPBIN_URL}/status/200`);
+    const res = await tunfetch(`${HTTPBIN_URL}/status/200`);
     expect([200, 404]).toContain(res.status);
   });
 
   it("returns 204 No Content", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/status/204`);
+    const res = await tunfetch(`${HTTPBIN_URL}/status/204`);
     expect(res.status).toBe(204);
   });
 
   it("returns 403 Forbidden", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/status/403`);
+    const res = await tunfetch(`${HTTPBIN_URL}/status/403`);
     expect(res.status).toBe(403);
   });
 
   it("returns 503 Service Unavailable", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/status/503`);
+    const res = await tunfetch(`${HTTPBIN_URL}/status/503`);
     expect(res.status).toBe(503);
   });
 });
 
 // ---------------------------------------------------------------------------
-// 30. fetch – hidden basic auth (404 instead of 401)
+// 30. tunfetch – hidden basic auth (404 instead of 401)
 // ---------------------------------------------------------------------------
-describe("fetch hidden auth", () => {
+describe("tunfetch hidden auth", () => {
   it("returns 404 from /hidden-basic-auth (no WWW-Authenticate header)", async () => {
-    const res = await fetch(`${HTTPBIN_URL}/hidden-basic-auth/user/pass`);
+    const res = await tunfetch(`${HTTPBIN_URL}/hidden-basic-auth/user/pass`);
     expect(res.status).toBe(404);
   });
 });
