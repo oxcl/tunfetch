@@ -5,6 +5,7 @@ pub mod tunnel;
 pub mod connect;
 pub mod request;
 pub mod redirect;
+pub mod streaming;
 
 #[cfg(test)]
 pub mod test_utils;

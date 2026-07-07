@@ -3,9 +3,12 @@ pub mod net;
 use net::request::{build_request, RequestOptions, RedirectMode};
 use net::proxy::Proxy;
 use net::redirect::{is_redirect, extract_redirect_url, should_change_method, detect_loop, RedirectError};
+use net::streaming::create_streaming_response;
 
+use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper::client::conn::http1;
+use hyper::body::Incoming;
 use hyper_util::rt::TokioIo;
 use wasm_bindgen::prelude::*;
 use worker::Socket;
@@ -110,6 +113,7 @@ fn parse_opts(opts: &JsValue) -> Result<(RequestOptions, Option<Proxy>), Tunfetc
 /// Make a single HTTP request and return the response.
 ///
 /// This is the core request logic without redirect handling.
+/// Returns (status, headers, body, url) where body is the raw Incoming stream.
 async fn make_request(
     url: &str,
     request_opts: &RequestOptions,
@@ -117,7 +121,7 @@ async fn make_request(
 ) -> Result<(
     u16,
     http::HeaderMap,
-    bytes::Bytes,
+    Incoming,
     String,
 ), TunfetchError> {
     // 1. Parse URL
@@ -177,15 +181,36 @@ async fn make_request(
     // 9. Extract status, headers, and body
     let status = response.status().as_u16();
     let response_headers = response.headers().clone();
+    let body = response.into_body();
 
-    let body_bytes = response
-        .into_body()
-        .collect()
+    Ok((status, response_headers, body, url.to_string()))
+}
+
+/// Buffer the entire body and return it as Bytes.
+///
+/// This is used for redirect responses where we need to read headers.
+async fn buffer_body(body: Incoming) -> Result<Bytes, TunfetchError> {
+    body.collect()
         .await
-        .map_err(|e| TunfetchError::Hyper(e))?
-        .to_bytes();
+        .map_err(TunfetchError::Hyper)
+        .map(|collected| collected.to_bytes())
+}
 
-    Ok((status, response_headers, body_bytes, url.to_string()))
+/// Build a web_sys::Response with headers and status.
+fn build_response_init(status: u16, headers: &http::HeaderMap) -> Result<web_sys::ResponseInit, TunfetchError> {
+    let response_init = web_sys::ResponseInit::new();
+    response_init.set_status(status);
+
+    let response_headers_js = web_sys::Headers::new()
+        .map_err(|e| TunfetchError::Js(e))?;
+    for (key, value) in headers.iter() {
+        response_headers_js
+            .set(key.as_str(), value.to_str().unwrap_or(""))
+            .map_err(|e| TunfetchError::Js(e))?;
+    }
+    response_init.set_headers(&response_headers_js);
+
+    Ok(response_init)
 }
 
 #[wasm_bindgen]
@@ -212,21 +237,12 @@ pub async fn tunfetch(url: String, opts: JsValue) -> Result<JsValue, JsValue> {
 
         // If redirect mode is manual, return the redirect response without following
         if is_redirect(status_code) && current_opts.redirect == RedirectMode::Manual {
-            // Build and return the redirect response as-is
-            let response_init = web_sys::ResponseInit::new();
-            response_init.set_status(status);
+            // Buffer body to read any content (though we ignore it for redirects)
+            let body_bytes = buffer_body(body).await?;
 
-            let response_headers_js = web_sys::Headers::new()
-                .map_err(|e| TunfetchError::Js(e))?;
-            for (key, value) in headers.iter() {
-                response_headers_js
-                    .set(key.as_str(), value.to_str().unwrap_or(""))
-                    .map_err(|e| TunfetchError::Js(e))?;
-            }
-            response_init.set_headers(&response_headers_js);
-
+            let response_init = build_response_init(status, &headers)?;
             let js_response = web_sys::Response::new_with_opt_js_u8_array_and_init(
-                Some(&js_sys::Uint8Array::from(&body[..])),
+                Some(&js_sys::Uint8Array::from(&body_bytes[..])),
                 &response_init,
             )
             .map_err(|e| TunfetchError::Js(e))?;
@@ -235,32 +251,35 @@ pub async fn tunfetch(url: String, opts: JsValue) -> Result<JsValue, JsValue> {
         }
 
         if !is_redirect(status_code) {
-            // Not a redirect - build and return the response
-            let response_init = web_sys::ResponseInit::new();
-            response_init.set_status(status);
-
-            let response_headers_js = web_sys::Headers::new()
-                .map_err(|e| TunfetchError::Js(e))?;
-            for (key, value) in headers.iter() {
-                response_headers_js
-                    .set(key.as_str(), value.to_str().unwrap_or(""))
-                    .map_err(|e| TunfetchError::Js(e))?;
-            }
-            response_init.set_headers(&response_headers_js);
+            // Not a redirect - build and return the streaming response
+            let response_init = build_response_init(status, &headers)?;
 
             // Null body for status codes that prohibit body (1xx, 204, 304)
             let js_response = if status == 204 || status == 304 || (status >= 100 && status < 200) {
                 web_sys::Response::new_with_opt_u8_array_and_init(None, &response_init)
             } else {
-                let js_body = js_sys::Uint8Array::from(&body[..]);
-                web_sys::Response::new_with_opt_js_u8_array_and_init(Some(&js_body), &response_init)
+                // Create streaming response
+                let (stream, body_reader) = create_streaming_response(body)
+                    .map_err(|e| TunfetchError::Js(e))?;
+
+                // Spawn the body reader task
+                wasm_bindgen_futures::spawn_local(body_reader);
+
+                // Create Response with ReadableStream body
+                web_sys::Response::new_with_opt_readable_stream_and_init(
+                    Some(&stream),
+                    &response_init,
+                )
             }
             .map_err(|e| TunfetchError::Js(e))?;
 
             return Ok(JsValue::from(js_response));
         }
 
-        // It's a redirect - get the Location header
+        // It's a redirect - buffer body to read headers
+        let _body_bytes = buffer_body(body).await?;
+
+        // Get the Location header
         let location = headers
             .get("location")
             .or_else(|| headers.get("Location"))
@@ -293,5 +312,3 @@ pub async fn tunfetch(url: String, opts: JsValue) -> Result<JsValue, JsValue> {
         current_url = redirect_url;
     }
 }
-
-

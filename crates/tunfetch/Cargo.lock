@@ -675,6 +675,7 @@ dependencies = [
  "console_error_panic_hook",
  "futures",
  "http",
+ "http-body",
  "http-body-util",
  "hyper",
  "hyper-util",
